@@ -20,6 +20,8 @@ pub struct Replacement {
     pub value: String,
     #[serde(rename = "type", default = "default_type")]
     pub type_: String,
+    #[serde(default)]
+    pub default: Option<String>,
 }
 
 fn default_type() -> String {

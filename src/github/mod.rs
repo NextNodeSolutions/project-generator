@@ -43,5 +43,23 @@ pub async fn create_github_repository_with_code(
     
     println!("Successfully pushed generated code to GitHub repository!");
     
+    // Set up repository branches and protection rules
+    println!("🔧 Setting up repository branches and protection...");
+    match github_repo.setup_repository_branches_and_protection(repo_name).await {
+        Ok(_) => println!("✅ Repository branch setup completed successfully!"),
+        Err(e) => eprintln!("⚠️  Warning: Failed to set up repository branches and protection: {}", e),
+    }
+    
+    // Trigger deployment workflows if this looks like an Astro project with CI/CD
+    if project_path.join(".github/workflows/deploy-dev.yml").exists() &&
+       project_path.join(".github/workflows/deploy-prod.yml").exists() {
+        println!("🔄 Detected CI/CD workflows, triggering deployments...");
+        
+        match github_repo.trigger_deployments(repo_name).await {
+            Ok(_) => println!("✅ Deployment workflows triggered successfully!"),
+            Err(e) => eprintln!("⚠️  Warning: Failed to trigger deployments: {}", e),
+        }
+    }
+    
     Ok(())
 } 

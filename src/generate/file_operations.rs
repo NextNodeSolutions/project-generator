@@ -84,21 +84,36 @@ fn replace_in_text_file(
     let mut new_content = content.to_string();
 
     for replacement in replacements {
-        if let Some(value) = crate::utils::context::get_variable(&replacement.name) {
-            let json_value = functions::convert_value_to_json(&value, &replacement.type_);
-            let formatted_value = serde_json::to_string(&json_value).unwrap_or_else(|_| value);
+        // Try to get variable, fallback to default if not found
+        let value = crate::utils::context::get_variable(&replacement.name)
+            .or_else(|| replacement.default.clone());
+            
+        if let Some(value) = value {
+            // For non-JSON files, use raw string values to avoid JSON quotes
+            let formatted_value = match replacement.type_.as_str() {
+                "array" => {
+                    let json_value = functions::convert_value_to_json(&value, &replacement.type_);
+                    serde_json::to_string(&json_value).unwrap_or_else(|_| value)
+                },
+                _ => value, // Use raw string value for non-JSON files
+            };
 
             let old_content = new_content.clone();
             new_content = new_content.replace(&format!("{{{{{}}}}}", replacement.name), &formatted_value);
             new_content = new_content.replace(&replacement.key, &formatted_value);
             
             if old_content != new_content {
-                context::debug_print(&format!("Applied replacement for '{}' with value '{}'", replacement.name, formatted_value));
+                let source = if crate::utils::context::get_variable(&replacement.name).is_some() {
+                    "variable"
+                } else {
+                    "default"
+                };
+                context::debug_print(&format!("Applied replacement for '{}' with {} value '{}'", replacement.name, source, formatted_value));
             } else {
                 context::debug_print(&format!("No matches found for replacement '{}'", replacement.name));
             }
         } else {
-            context::debug_print(&format!("Warning: Variable '{}' not found for text replacement", replacement.name));
+            context::debug_print(&format!("Warning: Variable '{}' not found and no default value provided", replacement.name));
         }
     }
 

@@ -19,7 +19,7 @@ pub struct FileConfig {
     #[serde(default)]
     pub github_tag: Option<String>,
     #[serde(flatten)]
-    pub additional_vars: std::collections::HashMap<String, String>,
+    pub additional_vars: std::collections::HashMap<String, serde_json::Value>,
 }
 
 impl FileConfig {
@@ -67,7 +67,18 @@ impl FileConfig {
         context::debug_print(&format!("Package name: '{}'", self.name));
         context::debug_print(&format!("Additional variables: {:?}", self.additional_vars));
         
-        let mut vars = self.additional_vars.clone();
+        // Convert serde_json::Value to String for additional variables
+        let mut vars: HashMap<String, String> = self.additional_vars.iter()
+            .map(|(k, v)| {
+                let value_str = match v {
+                    serde_json::Value::String(s) => s.clone(),
+                    serde_json::Value::Bool(b) => b.to_string(),
+                    serde_json::Value::Number(n) => n.to_string(),
+                    _ => v.to_string().trim_matches('"').to_string(),
+                };
+                (k.clone(), value_str)
+            })
+            .collect();
 
         // Add required variables in specific order
         vars.insert("project_name".to_string(), self.project_name.clone());

@@ -110,12 +110,13 @@ async fn main() -> Result<()> {
     // Get description from config or use default
     let description = file_config.additional_vars
         .get("description")
-        .cloned()
-        .unwrap_or_else(|| "Generated project".to_string());
+        .and_then(|v| v.as_str())
+        .unwrap_or("Generated project")
+        .to_string();
 
     // Create GitHub repository and push the code (includes full Git workflow)
     let github_tag = file_config.get_github_tag().map(|s| s.as_str());
-    let result = create_github_repository_with_code(&token, &repo_name, &project_path, &description, github_tag).await;
+    let result = create_github_repository_with_code(&token, &repo_name, &project_path, description.as_str(), github_tag).await;
 
     // Clean up temporary directory
     if let Err(e) = std::fs::remove_dir_all(&project_path) {
