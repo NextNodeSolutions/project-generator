@@ -1,5 +1,5 @@
-use std::io::{Error, ErrorKind, Result};
 use std::collections::HashMap;
+use std::io::{Error, ErrorKind, Result};
 use std::path::Path;
 
 mod functions;
@@ -19,8 +19,12 @@ pub fn get_template_info(
 ) -> Result<(String, String)> {
     if let Some(config_path) = &args.config {
         // Try to get template info from config file
-        let config = file_config::from_file(config_path)
-            .map_err(|e| Error::new(ErrorKind::InvalidData, format!("Failed to read config file: {}", e)))?;
+        let config = file_config::from_file(config_path).map_err(|e| {
+            Error::new(
+                ErrorKind::InvalidData,
+                format!("Failed to read config file: {}", e),
+            )
+        })?;
 
         // Set variables from config
         context::set_variables(config.to_variables());
@@ -29,16 +33,16 @@ pub fn get_template_info(
         config.get_template_info().ok_or_else(|| {
             Error::new(
                 ErrorKind::InvalidData,
-                "template_category and template_name are required in configuration file"
+                "template_category and template_name are required in configuration file",
             )
         })
     } else if let (Some(cat), Some(tmpl)) = (&args.category, &args.template) {
         Ok((cat.clone(), tmpl.clone()))
     } else {
         // List available templates
-        let templates = template_manager
-            .list_templates()
-            .map_err(|e| Error::new(ErrorKind::Other, format!("Failed to list templates: {}", e)))?;
+        let templates = template_manager.list_templates().map_err(|e| {
+            Error::new(ErrorKind::Other, format!("Failed to list templates: {}", e))
+        })?;
 
         // Select template
         functions::select_template(templates)
@@ -48,12 +52,20 @@ pub fn get_template_info(
 
 pub fn interact(template_path: &Path) -> Result<()> {
     // Get project name first
-    let project_name = functions::prompt_for_variable("project_name")
-        .ok_or_else(|| Error::new(ErrorKind::InvalidInput, "An error occurred while entering project name"))?;
+    let project_name = functions::prompt_for_variable("project_name").ok_or_else(|| {
+        Error::new(
+            ErrorKind::InvalidInput,
+            "An error occurred while entering project name",
+        )
+    })?;
 
     // Get package name
-    let package_name = functions::prompt_for_variable("name")
-        .ok_or_else(|| Error::new(ErrorKind::InvalidInput, "An error occurred while entering package name"))?;
+    let package_name = functions::prompt_for_variable("name").ok_or_else(|| {
+        Error::new(
+            ErrorKind::InvalidInput,
+            "An error occurred while entering package name",
+        )
+    })?;
 
     // Initialize variables with both names
     let mut variables = HashMap::from([
@@ -67,7 +79,10 @@ pub fn interact(template_path: &Path) -> Result<()> {
             for key in &unique_keys {
                 if key != "project_name" && key != "name" {
                     let value = functions::prompt_for_variable(key).ok_or_else(|| {
-                        Error::new(ErrorKind::InvalidInput, format!("An error occurred while entering {}", key))
+                        Error::new(
+                            ErrorKind::InvalidInput,
+                            format!("An error occurred while entering {}", key),
+                        )
                     })?;
                     variables.insert(key.to_string(), value);
                 }
@@ -91,11 +106,19 @@ pub fn interact(template_path: &Path) -> Result<()> {
         template_path.file_name().unwrap().to_string_lossy()
     );
 
-    project_generator::generate_project(template_path, &project_path)
-        .map_err(|e| Error::new(ErrorKind::Other, format!("An error occurred while generating the project: {}", e)))?;
+    project_generator::generate_project(template_path, &project_path).map_err(|e| {
+        Error::new(
+            ErrorKind::Other,
+            format!("An error occurred while generating the project: {}", e),
+        )
+    })?;
 
-    project_generator::install_dependencies(&project_path)
-        .map_err(|e| Error::new(ErrorKind::Other, format!("An error occurred while installing dependencies: {}", e)))?;
+    project_generator::install_dependencies(&project_path).map_err(|e| {
+        Error::new(
+            ErrorKind::Other,
+            format!("An error occurred while installing dependencies: {}", e),
+        )
+    })?;
 
     println!("Project generated successfully");
     Ok(())

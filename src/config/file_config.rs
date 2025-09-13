@@ -1,8 +1,8 @@
-use std::io::{Error, ErrorKind, Result};
+use crate::utils::context;
 use std::collections::HashMap;
 use std::fs;
+use std::io::{Error, ErrorKind, Result};
 use std::path::Path;
-use crate::utils::context;
 
 #[derive(serde::Deserialize)]
 pub struct FileConfig {
@@ -18,6 +18,8 @@ pub struct FileConfig {
     pub template_branch: Option<String>,
     #[serde(default)]
     pub github_tag: Option<String>,
+    #[serde(default)]
+    pub create_develop_branch: Option<bool>,
     #[serde(flatten)]
     pub additional_vars: std::collections::HashMap<String, serde_json::Value>,
 }
@@ -26,9 +28,12 @@ impl FileConfig {
     pub fn get_template_info(&self) -> Option<(String, String)> {
         match (&self.template_category, &self.template_name) {
             (Some(category), Some(name)) => {
-                context::debug_print(&format!("Template info: category='{}', name='{}'", category, name));
+                context::debug_print(&format!(
+                    "Template info: category='{}', name='{}'",
+                    category, name
+                ));
                 Some((category.clone(), name.clone()))
-            },
+            }
             _ => {
                 context::debug_print("Template info not found: missing category or name");
                 None
@@ -61,14 +66,20 @@ impl FileConfig {
         Ok(())
     }
 
+    pub fn should_create_develop_branch(&self) -> bool {
+        self.create_develop_branch.unwrap_or(false)
+    }
+
     pub fn to_variables(&self) -> std::collections::HashMap<String, String> {
         context::debug_print("Converting config to variables");
         context::debug_print(&format!("Project name: '{}'", self.project_name));
         context::debug_print(&format!("Package name: '{}'", self.name));
         context::debug_print(&format!("Additional variables: {:?}", self.additional_vars));
-        
+
         // Convert serde_json::Value to String for additional variables
-        let mut vars: HashMap<String, String> = self.additional_vars.iter()
+        let mut vars: HashMap<String, String> = self
+            .additional_vars
+            .iter()
             .map(|(k, v)| {
                 let value_str = match v {
                     serde_json::Value::String(s) => s.clone(),
@@ -112,9 +123,13 @@ impl FileConfig {
 pub fn from_file<P: AsRef<Path>>(path: P) -> Result<FileConfig> {
     let path_ref = path.as_ref();
     context::debug_print(&format!("Reading config file: {}", path_ref.display()));
-    
-    let content = fs::read_to_string(path_ref)
-        .map_err(|e| Error::new(ErrorKind::InvalidData, format!("Failed to read config file: {}", e)))?;
+
+    let content = fs::read_to_string(path_ref).map_err(|e| {
+        Error::new(
+            ErrorKind::InvalidData,
+            format!("Failed to read config file: {}", e),
+        )
+    })?;
 
     context::debug_print(&format!("Config file size: {} bytes", content.len()));
 
@@ -122,8 +137,8 @@ pub fn from_file<P: AsRef<Path>>(path: P) -> Result<FileConfig> {
     if content.trim().is_empty() {
         context::debug_print("ERROR: Configuration file is empty");
         return Err(Error::new(
-            ErrorKind::InvalidData, 
-            "Configuration file is empty. Please add configuration content."
+            ErrorKind::InvalidData,
+            "Configuration file is empty. Please add configuration content.",
         ));
     }
 
@@ -134,16 +149,15 @@ pub fn from_file<P: AsRef<Path>>(path: P) -> Result<FileConfig> {
         Ok(config)
     } else {
         context::debug_print("YAML parsing failed, attempting JSON parsing");
-        let config: FileConfig = serde_json::from_str(&content)
-            .map_err(|e| {
-                let error_msg = if content.trim().is_empty() {
-                    "Configuration file is empty".to_string()
-                } else {
-                    format!("Failed to parse config file (neither YAML nor JSON): {}", e)
-                };
-                context::debug_print(&format!("ERROR: {}", error_msg));
-                Error::new(ErrorKind::InvalidData, error_msg)
-            })?;
+        let config: FileConfig = serde_json::from_str(&content).map_err(|e| {
+            let error_msg = if content.trim().is_empty() {
+                "Configuration file is empty".to_string()
+            } else {
+                format!("Failed to parse config file (neither YAML nor JSON): {}", e)
+            };
+            context::debug_print(&format!("ERROR: {}", error_msg));
+            Error::new(ErrorKind::InvalidData, error_msg)
+        })?;
         context::debug_print("Successfully parsed JSON config");
         Ok(config)
     }
