@@ -39,6 +39,52 @@ Options:
   -V, --version                 Show version
 ```
 
+## Quick Start - Template Testing
+
+Pour tester rapidement vos templates, utilisez les commandes Make automatisées :
+
+### Commandes disponibles
+
+```bash
+# Afficher les templates disponibles et les commandes
+make show-templates
+
+# Générer une configuration pour le template Library
+make config-library
+
+# Générer une configuration pour le template Astro
+make config-astro
+
+# Tester le template Library (génère config + lance le test)
+make test-library
+
+# Tester le template Astro (génère config + lance le test)
+make test-astro
+
+# Nettoyer les fichiers de configuration de test
+make clean-configs
+```
+
+### Script automatique de configuration
+
+Le script `scripts/generate-config.sh` analyse automatiquement les `template_config.json` et génère des fichiers de configuration prêts à l'emploi :
+
+```bash
+# Générer une configuration pour un template spécifique
+./scripts/generate-config.sh library
+./scripts/generate-config.sh astro
+
+# Avec un nom de fichier personnalisé
+./scripts/generate-config.sh library ma-config-custom.yaml
+```
+
+**Avantages :**
+- ✅ **Extraction automatique** des placeholders depuis `template_config.json`
+- ✅ **Valeurs par défaut intelligentes** selon le type de template
+- ✅ **Noms uniques** avec timestamp pour éviter les conflits
+- ✅ **Configuration complète** prête à l'utilisation
+
+
 ## Tutorial 1: Remote Mode (GitHub)
 
 Remote mode generates a project locally then automatically creates a GitHub repository with the code.
