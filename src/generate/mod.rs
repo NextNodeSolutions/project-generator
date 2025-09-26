@@ -21,13 +21,19 @@ pub fn handle_config_mode(template_path: &Path, project_name: &str) -> Result<()
         .join(project_name);
 
     // Display the default path and ask for confirmation
-    println!("Project will be created in: {}", default_project_path.display());
+    println!(
+        "Project will be created in: {}",
+        default_project_path.display()
+    );
     print!("Is this path correct? (Y/n): ");
     io::stdout().flush().unwrap();
 
     let mut input = String::new();
     io::stdin().read_line(&mut input).map_err(|e| {
-        Error::new(ErrorKind::Other, format!("Failed to read user input: {}", e))
+        Error::new(
+            ErrorKind::Other,
+            format!("Failed to read user input: {}", e),
+        )
     })?;
 
     let input = input.trim().to_lowercase();
@@ -39,17 +45,20 @@ pub fn handle_config_mode(template_path: &Path, project_name: &str) -> Result<()
         // Ask for custom path
         print!("Please enter the custom path: ");
         io::stdout().flush().unwrap();
-        
+
         let mut custom_path = String::new();
         io::stdin().read_line(&mut custom_path).map_err(|e| {
-            Error::new(ErrorKind::Other, format!("Failed to read custom path: {}", e))
+            Error::new(
+                ErrorKind::Other,
+                format!("Failed to read custom path: {}", e),
+            )
         })?;
-        
+
         let custom_path = custom_path.trim();
         if custom_path.is_empty() {
             return Err(Error::new(ErrorKind::InvalidInput, "Path cannot be empty"));
         }
-        
+
         PathBuf::from(custom_path).join(project_name)
     };
 
@@ -57,10 +66,10 @@ pub fn handle_config_mode(template_path: &Path, project_name: &str) -> Result<()
 }
 
 pub fn handle_config_mode_with_path(
-    template_path: &Path, 
-    project_name: &str, 
-    project_path: &Path, 
-    install_deps: bool
+    template_path: &Path,
+    project_name: &str,
+    project_path: &Path,
+    install_deps: bool,
 ) -> Result<()> {
     println!(
         "Generating project '{}' with template '{}'",
@@ -68,12 +77,20 @@ pub fn handle_config_mode_with_path(
         template_path.display()
     );
 
-    project_generator::generate_project(&template_path, &project_path)
-        .map_err(|e| Error::new(ErrorKind::Other, format!("An error occurred while generating the project: {}", e)))?;
+    project_generator::generate_project(&template_path, &project_path).map_err(|e| {
+        Error::new(
+            ErrorKind::Other,
+            format!("An error occurred while generating the project: {}", e),
+        )
+    })?;
 
     if install_deps {
-        project_generator::install_dependencies(&project_path)
-            .map_err(|e| Error::new(ErrorKind::Other, format!("An error occurred while installing dependencies: {}", e)))?;
+        project_generator::install_dependencies(&project_path).map_err(|e| {
+            Error::new(
+                ErrorKind::Other,
+                format!("An error occurred while installing dependencies: {}", e),
+            )
+        })?;
     }
 
     println!("Project generated successfully");

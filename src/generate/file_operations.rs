@@ -9,7 +9,11 @@ use super::functions;
 use crate::utils::context;
 
 pub fn copy_dir_all(src: &Path, dst: &Path) -> std::io::Result<()> {
-    context::debug_print(&format!("Copying directory from '{}' to '{}'", src.display(), dst.display()));
+    context::debug_print(&format!(
+        "Copying directory from '{}' to '{}'",
+        src.display(),
+        dst.display()
+    ));
     fs::create_dir_all(dst)?;
     for entry in fs::read_dir(src)? {
         let entry = entry?;
@@ -40,8 +44,11 @@ pub fn copy_dir_all(src: &Path, dst: &Path) -> std::io::Result<()> {
 
 pub fn replace_in_file(file_path: &Path, replacements: &[Replacement]) -> io::Result<()> {
     context::debug_print(&format!("Processing file: {}", file_path.display()));
-    context::debug_print(&format!("Found {} replacements to apply", replacements.len()));
-    
+    context::debug_print(&format!(
+        "Found {} replacements to apply",
+        replacements.len()
+    ));
+
     let content = fs::read_to_string(file_path)?;
 
     if file_path.extension().and_then(|s| s.to_str()) == Some("json") {
@@ -56,7 +63,7 @@ pub fn replace_in_file(file_path: &Path, replacements: &[Replacement]) -> io::Re
 fn write_json_to_file(file_path: &Path, ordered_map: IndexMap<String, Value>) -> io::Result<()> {
     context::debug_print(&format!("Writing JSON file: {}", file_path.display()));
     context::debug_print(&format!("JSON contains {} keys", ordered_map.len()));
-    
+
     let json_str = serde_json::to_string_pretty(&ordered_map)?;
     fs::write(file_path, json_str)
 }
@@ -68,8 +75,11 @@ fn replace_in_json_file(
 ) -> io::Result<()> {
     context::debug_print("Parsing JSON content");
     let template_json: IndexMap<String, Value> = serde_json::from_str(content)?;
-    context::debug_print(&format!("Template JSON contains {} keys", template_json.len()));
-    
+    context::debug_print(&format!(
+        "Template JSON contains {} keys",
+        template_json.len()
+    ));
+
     let mut ordered_map = functions::create_ordered_map(&template_json, replacements);
     functions::update_existing_values(&mut ordered_map, replacements);
     write_json_to_file(file_path, ordered_map)
@@ -87,33 +97,43 @@ fn replace_in_text_file(
         // Try to get variable, fallback to default if not found
         let value = crate::utils::context::get_variable(&replacement.name)
             .or_else(|| replacement.default.clone());
-            
+
         if let Some(value) = value {
             // For non-JSON files, use raw string values to avoid JSON quotes
             let formatted_value = match replacement.type_.as_str() {
                 "array" => {
                     let json_value = functions::convert_value_to_json(&value, &replacement.type_);
                     serde_json::to_string(&json_value).unwrap_or_else(|_| value)
-                },
+                }
                 _ => value, // Use raw string value for non-JSON files
             };
 
             let old_content = new_content.clone();
-            new_content = new_content.replace(&format!("{{{{{}}}}}", replacement.name), &formatted_value);
+            new_content =
+                new_content.replace(&format!("{{{{{}}}}}", replacement.name), &formatted_value);
             new_content = new_content.replace(&replacement.key, &formatted_value);
-            
+
             if old_content != new_content {
                 let source = if crate::utils::context::get_variable(&replacement.name).is_some() {
                     "variable"
                 } else {
                     "default"
                 };
-                context::debug_print(&format!("Applied replacement for '{}' with {} value '{}'", replacement.name, source, formatted_value));
+                context::debug_print(&format!(
+                    "Applied replacement for '{}' with {} value '{}'",
+                    replacement.name, source, formatted_value
+                ));
             } else {
-                context::debug_print(&format!("No matches found for replacement '{}'", replacement.name));
+                context::debug_print(&format!(
+                    "No matches found for replacement '{}'",
+                    replacement.name
+                ));
             }
         } else {
-            context::debug_print(&format!("Warning: Variable '{}' not found and no default value provided", replacement.name));
+            context::debug_print(&format!(
+                "Warning: Variable '{}' not found and no default value provided",
+                replacement.name
+            ));
         }
     }
 

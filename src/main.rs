@@ -6,12 +6,12 @@ mod github;
 mod template;
 mod utils;
 
-use std::io::{Error, ErrorKind, Result};
 use args::Args;
 use clap::Parser;
 use cli::{get_template_info, prompt_for_repo_name};
 use generate::{handle_config_mode, handle_interactive_mode};
 use github::{create_github_repository_with_code, extract_organization_from_repo_url};
+use std::io::{Error, ErrorKind, Result};
 use template::TemplateManager;
 
 #[tokio::main]
@@ -24,7 +24,10 @@ async fn main() -> Result<()> {
     // Get template branch from config if available
     let template_branch = if let Some(config_path) = &args.config {
         let config = crate::config::file_config::from_file(config_path).ok();
-        config.as_ref().map(|c| c.get_template_branch()).map(|s| s.to_string())
+        config
+            .as_ref()
+            .map(|c| c.get_template_branch())
+            .map(|s| s.to_string())
     } else {
         None
     };
@@ -42,7 +45,8 @@ async fn main() -> Result<()> {
     if !args.remote {
         // Handle generation based on mode
         if args.config.is_none() {
-            return handle_interactive_mode(&template_path).map_err(|e| Error::new(ErrorKind::Other, e.to_string()));
+            return handle_interactive_mode(&template_path)
+                .map_err(|e| Error::new(ErrorKind::Other, e.to_string()));
         }
 
         // Get project name from variables
@@ -50,7 +54,8 @@ async fn main() -> Result<()> {
             utils::error::print_error_and_exit("project_name is required in configuration file")
         });
 
-        return handle_config_mode(&template_path, &project_name).map_err(|e| Error::new(ErrorKind::Other, e.to_string()));
+        return handle_config_mode(&template_path, &project_name)
+            .map_err(|e| Error::new(ErrorKind::Other, e.to_string()));
     }
 
     // Remote mode: generate project locally, then create GitHub repo
@@ -60,26 +65,40 @@ async fn main() -> Result<()> {
         .ok_or_else(|| {
             Error::new(
                 ErrorKind::InvalidInput,
-                "GitHub token is required for remote mode. Set GITHUB_TOKEN env var or use --token"
+                "GitHub token is required for remote mode. Set GITHUB_TOKEN env var or use --token",
             )
         })?;
 
     // Config file is required for remote mode - check early
     let config_path = args.config.as_ref().ok_or_else(|| {
-        Error::new(ErrorKind::InvalidInput, "Config file is required for remote mode. Use --config to specify a config file.")
+        Error::new(
+            ErrorKind::InvalidInput,
+            "Config file is required for remote mode. Use --config to specify a config file.",
+        )
     })?;
 
     // Read and parse config file early to get project name and validate github_tag
-    let file_config = crate::config::file_config::from_file(config_path)
-        .map_err(|e| Error::new(ErrorKind::InvalidData, format!("Failed to read config file: {}", e)))?;
-    
+    let file_config = crate::config::file_config::from_file(config_path).map_err(|e| {
+        Error::new(
+            ErrorKind::InvalidData,
+            format!("Failed to read config file: {}", e),
+        )
+    })?;
+
     // Validate github_tag early (before pulling code)
-    file_config.validate_github_tag()
-        .map_err(|e| Error::new(ErrorKind::InvalidData, format!("GitHub tag validation failed: {}", e)))?;
-    
+    file_config.validate_github_tag().map_err(|e| {
+        Error::new(
+            ErrorKind::InvalidData,
+            format!("GitHub tag validation failed: {}", e),
+        )
+    })?;
+
     let project_name = file_config.project_name.clone();
     if project_name.is_empty() {
-        return Err(Error::new(ErrorKind::InvalidData, "project_name is required in config file"));
+        return Err(Error::new(
+            ErrorKind::InvalidData,
+            "project_name is required in config file",
+        ));
     }
 
     // Get organization from REPO_URL
@@ -96,19 +115,29 @@ async fn main() -> Result<()> {
 
     // Generate the project in temp directory
     if args.config.is_some() {
-        crate::generate::handle_config_mode_with_path(&template_path, &project_name, &project_path, false)
-            .map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?;
+        crate::generate::handle_config_mode_with_path(
+            &template_path,
+            &project_name,
+            &project_path,
+            false,
+        )
+        .map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?;
     } else {
         handle_interactive_mode(&template_path)
             .map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?;
     }
 
     // Install dependencies AFTER copying template files but BEFORE Git operations
-    crate::generate::project_generator::install_dependencies(&project_path)
-        .map_err(|e| Error::new(ErrorKind::Other, format!("Failed to install dependencies: {}", e)))?;
+    crate::generate::project_generator::install_dependencies(&project_path).map_err(|e| {
+        Error::new(
+            ErrorKind::Other,
+            format!("Failed to install dependencies: {}", e),
+        )
+    })?;
 
     // Get description from config or use default
-    let description = file_config.additional_vars
+    let description = file_config
+        .additional_vars
         .get("description")
         .and_then(|v| v.as_str())
         .unwrap_or("Generated project")
@@ -116,11 +145,24 @@ async fn main() -> Result<()> {
 
     // Create GitHub repository and push the code (includes full Git workflow)
     let github_tag = file_config.get_github_tag().map(|s| s.as_str());
-    let result = create_github_repository_with_code(&token, &repo_name, &project_path, description.as_str(), github_tag).await;
+    let create_develop = file_config.should_create_develop_branch();
+    let result = create_github_repository_with_code(
+        &token,
+        &repo_name,
+        &project_path,
+        description.as_str(),
+        github_tag,
+        create_develop,
+    )
+    .await;
 
     // Clean up temporary directory
     if let Err(e) = std::fs::remove_dir_all(&project_path) {
-        eprintln!("Warning: Failed to clean up temporary directory '{}': {}", project_path.display(), e);
+        eprintln!(
+            "Warning: Failed to clean up temporary directory '{}': {}",
+            project_path.display(),
+            e
+        );
     } else {
         println!("Temporary directory cleaned up successfully");
     }

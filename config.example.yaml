@@ -17,6 +17,9 @@ github_tag: "apps"                        # Optional: Adds a topic to the GitHub
                                           # Topics appear under the repository name for categorization
                                           # If invalid, generation stops before pulling code
 
+# Branch configuration (optional)
+create_develop_branch: true               # Create develop branch (default: false, set to true to enable)
+
 # Additional variables (optional, depends on template)
 author: "My Name"
 license: "MIT"
