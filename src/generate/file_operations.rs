@@ -109,9 +109,15 @@ fn replace_in_text_file(
             };
 
             let old_content = new_content.clone();
-            new_content =
-                new_content.replace(&format!("{{{{{}}}}}", replacement.name), &formatted_value);
-            new_content = new_content.replace(&replacement.key, &formatted_value);
+
+            // Determine replacement pattern
+            let pattern = if let Some(key) = &replacement.key {
+                key.clone()
+            } else {
+                format!("{{{{{}}}}}", replacement.name)
+            };
+
+            new_content = new_content.replace(&pattern, &formatted_value);
 
             if old_content != new_content {
                 let source = if crate::utils::context::get_variable(&replacement.name).is_some() {
@@ -120,13 +126,13 @@ fn replace_in_text_file(
                     "default"
                 };
                 context::debug_print(&format!(
-                    "Applied replacement for '{}' with {} value '{}'",
-                    replacement.name, source, formatted_value
+                    "Applied replacement for '{}' (pattern: '{}') with {} value '{}'",
+                    replacement.name, pattern, source, formatted_value
                 ));
             } else {
                 context::debug_print(&format!(
-                    "No matches found for replacement '{}'",
-                    replacement.name
+                    "No matches found for replacement '{}' (pattern: '{}')",
+                    replacement.name, pattern
                 ));
             }
         } else {

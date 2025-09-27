@@ -1,10 +1,16 @@
 #!/bin/bash
 
-# Script pour générer automatiquement une configuration de test à partir d'un template_config.json
-# Usage: ./scripts/generate-config.sh <template_type> [output_file]
+# Script pour générer automatiquement une configuration complète et dynamique
+# Ce script analyse automatiquement :
+#   1. La structure FileConfig du code Rust pour les champs système
+#   2. Le template_config.json du template sélectionné pour les variables
+#
+# Usage: ./scripts/generate-config.sh [template_path] [output_file]
 # Exemples:
-#   ./scripts/generate-config.sh library
-#   ./scripts/generate-config.sh astro test-astro-config.yaml
+#   ./scripts/generate-config.sh                    # Mode interactif
+#   ./scripts/generate-config.sh apps/astro         # Template spécifique
+#   ./scripts/generate-config.sh apps/astro config.yaml  # Avec fichier de sortie
+#   ./scripts/generate-config.sh --list             # Liste tous les templates
 
 set -e
 
@@ -19,6 +25,7 @@ NC='\033[0m' # No Color
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 TEMPLATES_DIR="$(cd "${PROJECT_ROOT}/../project-templates" && pwd)"
+FILE_CONFIG_PATH="$PROJECT_ROOT/src/config/file_config.rs"
 
 # Fonction d'affichage coloré
 log_info() {
@@ -37,192 +44,407 @@ log_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
-# Fonction d'aide
-show_help() {
-    echo "Usage: $0 <template_type> [output_file]"
-    echo ""
-    echo "Template types disponibles:"
-    echo "  astro    - Template Astro (apps/astro)"
-    echo "  library  - Template Library (packages/library)"
-    echo ""
-    echo "Arguments:"
-    echo "  template_type  Type de template (obligatoire)"
-    echo "  output_file    Nom du fichier de sortie (optionnel, par défaut: test-<template>-config.yaml)"
-    echo ""
-    echo "Exemples:"
-    echo "  $0 library"
-    echo "  $0 astro custom-config.yaml"
-    exit 0
+# ========================================
+# FONCTIONS D'EXTRACTION DYNAMIQUE
+# ========================================
+
+# Fonction pour extraire les champs de FileConfig depuis le code Rust
+extract_fileconfig_fields() {
+    log_info "Extraction des champs système depuis FileConfig..." >&2
+
+    if [[ ! -f "$FILE_CONFIG_PATH" ]]; then
+        log_error "Fichier FileConfig non trouvé: $FILE_CONFIG_PATH" >&2
+        exit 1
+    fi
+
+    # Extraire tous les champs publics de la structure FileConfig
+    awk '/^pub struct FileConfig/,/^}/' "$FILE_CONFIG_PATH" | \
+    grep -E '^\s*pub\s+[a-z_]+:' | \
+    grep -v "additional_vars" | \
+    awk '{print $2}' | \
+    sed 's/:.*$//' | \
+    sort
 }
 
-# Vérification des arguments
-if [[ $# -eq 0 ]] || [[ "$1" == "-h" ]] || [[ "$1" == "--help" ]]; then
-    show_help
-fi
+# Fonction pour extraire les métadonnées d'un champ FileConfig
+extract_field_metadata() {
+    local field="$1"
+    local is_optional="false"
+    local field_type=""
+    local valid_values=""
 
-TEMPLATE_TYPE="$1"
-OUTPUT_FILE="${2:-test-${TEMPLATE_TYPE}-config.yaml}"
+    # Vérifier si le champ est Option<> (donc optionnel)
+    if grep "pub $field:" "$FILE_CONFIG_PATH" | grep -q "Option<"; then
+        is_optional="true"
+    fi
 
-# Mapping des types de templates vers leurs chemins
-case "$TEMPLATE_TYPE" in
-    "astro")
-        TEMPLATE_PATH="$TEMPLATES_DIR/apps/astro"
-        TEMPLATE_CATEGORY="apps"
-        TEMPLATE_NAME="astro"
-        ;;
-    "library")
-        TEMPLATE_PATH="$TEMPLATES_DIR/packages/library"
-        TEMPLATE_CATEGORY="packages"
-        TEMPLATE_NAME="library"
-        ;;
-    *)
-        log_error "Type de template non reconnu: $TEMPLATE_TYPE"
-        log_error "Types supportés: astro, library"
+    # Extraire le type
+    field_type=$(grep "pub $field:" "$FILE_CONFIG_PATH" | sed -E 's/.*:\s*(.+)$/\1/' | tr -d ',')
+
+    # Extraire les valeurs valides pour github_tag
+    if [[ "$field" == "github_tag" ]]; then
+        valid_values=$(grep -A 5 "validate_github_tag" "$FILE_CONFIG_PATH" | \
+                      grep -o '"[^"]*"' | tr -d '"' | paste -sd '|' -)
+    fi
+
+    echo "$is_optional|$field_type|$valid_values"
+}
+
+# Fonction pour extraire les variables depuis template_config.json
+extract_template_variables() {
+    local template_config_file="$1"
+
+    log_info "Extraction des variables depuis template_config.json..." >&2
+
+    if [[ ! -f "$template_config_file" ]]; then
+        log_error "Fichier template_config.json non trouvé: $template_config_file" >&2
         exit 1
-        ;;
-esac
+    fi
 
-# Vérification de l'existence du template
-TEMPLATE_CONFIG_FILE="$TEMPLATE_PATH/template_config.json"
-if [[ ! -f "$TEMPLATE_CONFIG_FILE" ]]; then
-    log_error "Fichier template_config.json non trouvé: $TEMPLATE_CONFIG_FILE"
-    exit 1
-fi
+    # Extraire tous les noms de variables uniques
+    jq -r '.[].replacements[].name | select(. != null)' "$template_config_file" 2>/dev/null | sort -u || {
+        log_error "Erreur lors de l'analyse du fichier JSON. Vérifiez que jq est installé et que le JSON est valide." >&2
+        exit 1
+    }
+}
 
-log_info "Analyse du template: $TEMPLATE_TYPE"
-log_info "Fichier de configuration template: $TEMPLATE_CONFIG_FILE"
+# Fonction pour générer une valeur par défaut intelligente
+generate_default_value() {
+    local field="$1"
+    local template_path="$2"
+    local timestamp="$3"
 
-# Extraction des placeholders du template_config.json
-log_info "Extraction des placeholders..."
+    # Extraire le nom du template et la catégorie depuis le chemin
+    local template_name=$(basename "$template_path")
+    local template_category=$(dirname "$template_path" | sed "s|$TEMPLATES_DIR/||")
 
-# Utilisation de jq pour extraire tous les placeholders {{variable}}
-PLACEHOLDERS=$(jq -r '
-    [.. | strings] |
-    map(match("\\{\\{([^}]+)\\}\\}"; "g")) |
-    flatten |
-    map(.captures[0].string) |
-    unique |
-    sort[]
-' "$TEMPLATE_CONFIG_FILE" 2>/dev/null || {
-    log_error "Erreur lors de l'analyse du fichier JSON. Vérifiez que jq est installé et que le JSON est valide."
-    exit 1
-})
-
-if [[ -z "$PLACEHOLDERS" ]]; then
-    log_warning "Aucun placeholder trouvé dans le template_config.json"
-    exit 1
-fi
-
-log_success "Placeholders trouvés:"
-echo "$PLACEHOLDERS" | while read -r placeholder; do
-    echo "  - {{$placeholder}}"
-done
-
-# Génération du timestamp pour des noms uniques
-TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
-
-# Création du fichier de configuration YAML
-log_info "Génération du fichier de configuration: $OUTPUT_FILE"
-
-cat > "$OUTPUT_FILE" << EOF
-# Configuration générée automatiquement pour le template $TEMPLATE_TYPE
-# Généré le $(date)
-# Source: $TEMPLATE_CONFIG_FILE
-
-# Configuration de base
-template_category: "$TEMPLATE_CATEGORY"
-template_name: "$TEMPLATE_NAME"
-
-EOF
-
-# Ajout des variables avec des valeurs par défaut intelligentes
-echo "$PLACEHOLDERS" | while read -r placeholder; do
-    case "$placeholder" in
+    case "$field" in
         "project_name")
-            echo "project_name: \"test-${TEMPLATE_TYPE}-${TIMESTAMP}\"" >> "$OUTPUT_FILE"
-            ;;
-        "project_description")
-            echo "project_description: \"Projet de test généré automatiquement pour le template ${TEMPLATE_TYPE}\"" >> "$OUTPUT_FILE"
-            ;;
-        "project_author")
-            echo "project_author: \"NextNodeSolutions <contact@nextnode.fr>\"" >> "$OUTPUT_FILE"
-            ;;
-        "project_license")
-            echo "project_license: \"MIT\"" >> "$OUTPUT_FILE"
-            ;;
-        "project_version")
-            echo "project_version: \"1.0.0\"" >> "$OUTPUT_FILE"
-            ;;
-        "project_keywords")
-            case "$TEMPLATE_TYPE" in
-                "astro")
-                    cat >> "$OUTPUT_FILE" << EOF
-project_keywords:
-  - "astro"
-  - "typescript"
-  - "tailwind"
-  - "test"
-EOF
-                    ;;
-                "library")
-                    cat >> "$OUTPUT_FILE" << EOF
-project_keywords:
-  - "typescript"
-  - "library"
-  - "nextnode"
-  - "test"
-EOF
-                    ;;
-                *)
-                    cat >> "$OUTPUT_FILE" << EOF
-project_keywords:
-  - "test"
-  - "${TEMPLATE_TYPE}"
-EOF
-                    ;;
-            esac
+            echo "test-${template_name}-${timestamp}"
             ;;
         "name")
-            echo "name: \"@nextnode/test-${TEMPLATE_TYPE}-${TIMESTAMP}\"" >> "$OUTPUT_FILE"
+            echo "@nextnode/test-${template_name}-${timestamp}"
+            ;;
+        "template_category")
+            echo "$template_category"
+            ;;
+        "template_name")
+            echo "$template_name"
+            ;;
+        "template_branch")
+            echo "main"
+            ;;
+        "github_tag")
+            echo "$template_category"
+            ;;
+        "create_develop_branch")
+            echo "false"
+            ;;
+        "project_description"|"description")
+            echo "Projet de test généré automatiquement pour le template ${template_name}"
+            ;;
+        "project_author"|"author")
+            echo "NextNodeSolutions <contact@nextnode.fr>"
+            ;;
+        "project_version"|"version")
+            echo "1.0.0"
+            ;;
+        "project_license"|"license")
+            echo "MIT"
             ;;
         "repository_url")
-            echo "repository_url: \"https://github.com/NextNodeSolutions/test-${TEMPLATE_TYPE}-${TIMESTAMP}\"" >> "$OUTPUT_FILE"
+            echo "https://github.com/NextNodeSolutions/test-${template_name}-${timestamp}"
             ;;
         "website_url")
-            echo "website_url: \"https://test-${TEMPLATE_TYPE}-${TIMESTAMP}.fly.dev\"" >> "$OUTPUT_FILE"
+            echo "https://test-${template_name}-${timestamp}.fly.dev"
             ;;
         "dev_domain")
-            echo "dev_domain: \"test-${TEMPLATE_TYPE}-${TIMESTAMP}-dev.fly.dev\"" >> "$OUTPUT_FILE"
+            echo "test-${template_name}-${timestamp}-dev.fly.dev"
+            ;;
+        "project_keywords"|"keywords")
+            # Retourner une structure spéciale pour les arrays
+            echo "ARRAY|${template_name},nextnode,test"
             ;;
         *)
-            # Pour les variables non reconnues, utiliser une valeur par défaut générique
-            echo "${placeholder}: \"${placeholder}_value\"" >> "$OUTPUT_FILE"
+            # Valeur générique pour les champs inconnus
+            echo "${field}_value"
             ;;
     esac
-done
+}
 
-# Ajout de variables optionnelles communes
-cat >> "$OUTPUT_FILE" << EOF
+# Fonction pour lister tous les templates disponibles
+list_available_templates() {
+    log_info "Templates disponibles:"
+    echo ""
 
-# Variables optionnelles supplémentaires
-author: "NextNodeSolutions"
-license: "MIT"
-version: "1.0.0"
+    find "$TEMPLATES_DIR" -name "template_config.json" -type f | \
+    while read -r config_file; do
+        local template_path=$(dirname "$config_file")
+        local relative_path=${template_path#$TEMPLATES_DIR/}
+        local category=$(dirname "$relative_path")
+        local name=$(basename "$relative_path")
 
-# Configuration GitHub (pour mode remote)
-# github_tag: "${TEMPLATE_CATEGORY}"
-# create_develop_branch: true
+        echo "  $relative_path"
+        echo "    Catégorie: $category"
+        echo "    Nom: $name"
+        echo "    Config: $config_file"
+        echo ""
+    done
+}
+
+# Fonction pour générer le fichier YAML complet
+generate_dynamic_yaml() {
+    local template_path="$1"
+    local output_file="$2"
+    local timestamp=$(date +"%Y%m%d_%H%M%S")
+
+    # Vérifier l'existence du template
+    local template_config_file="$template_path/template_config.json"
+    if [[ ! -f "$template_config_file" ]]; then
+        log_error "Template non trouvé: $template_path"
+        log_error "Fichier manquant: $template_config_file"
+        exit 1
+    fi
+
+    log_info "Génération de la configuration pour: $template_path"
+
+    # Extraire les champs système depuis FileConfig
+    local system_fields=$(extract_fileconfig_fields)
+
+    # Extraire les variables du template
+    local template_vars=$(extract_template_variables "$template_config_file")
+
+    # Début du fichier YAML avec métadonnées
+    cat > "$output_file" << EOF
+# ========================================
+# CONFIGURATION GÉNÉRÉE AUTOMATIQUEMENT
+# ========================================
+# Date de génération: $(date)
+# Template analysé: $template_path
+# Sources:
+#   - Champs système: $FILE_CONFIG_PATH
+#   - Variables template: $template_config_file
+#
+# Usage:
+#   Mode local:  cargo run -- --config $output_file
+#   Mode remote: cargo run -- --remote --config $output_file
+
+# ========================================
+# CHAMPS SYSTÈME (FileConfig)
+# ========================================
+# Ces champs sont définis dans la structure Rust FileConfig
+# et sont traités spécialement par le générateur
+
 EOF
 
-log_success "Fichier de configuration généré: $OUTPUT_FILE"
-log_info "Vous pouvez maintenant utiliser cette configuration avec:"
-log_info "  cargo run -- --config $OUTPUT_FILE"
-log_info ""
-log_info "Ou modifier le fichier selon vos besoins avant de l'utiliser."
+    # Ajouter les champs système avec métadonnées
+    while read -r field; do
+        if [[ -n "$field" ]]; then
+            local metadata=$(extract_field_metadata "$field")
+            local is_optional=$(echo "$metadata" | cut -d'|' -f1)
+            local field_type=$(echo "$metadata" | cut -d'|' -f2)
+            local valid_values=$(echo "$metadata" | cut -d'|' -f3)
 
-# Affichage du contenu généré
-echo ""
-log_info "Contenu du fichier généré:"
-echo "----------------------------------------"
-cat "$OUTPUT_FILE"
-echo "----------------------------------------"
+            local value=$(generate_default_value "$field" "$template_path" "$timestamp")
+
+            if [[ "$is_optional" == "true" ]]; then
+                # Commenter les champs optionnels par défaut
+                echo "# $field: \"$value\"  # [OPTIONNEL] $field_type" >> "$output_file"
+
+                # Ajouter les valeurs valides si disponibles
+                if [[ -n "$valid_values" ]]; then
+                    echo "#   Valeurs autorisées: $valid_values" >> "$output_file"
+                fi
+            else
+                echo "$field: \"$value\"  # [REQUIS] $field_type" >> "$output_file"
+            fi
+        fi
+    done <<< "$system_fields"
+
+    # Section variables du template
+    cat >> "$output_file" << EOF
+
+# ========================================
+# VARIABLES DU TEMPLATE
+# ========================================
+# Ces variables sont définies dans template_config.json
+# et seront placées dans additional_vars lors de l'exécution
+
+EOF
+
+    # Ajouter les variables du template
+    while read -r var; do
+        if [[ -n "$var" ]]; then
+            # Éviter les doublons avec les champs système
+            if ! echo "$system_fields" | grep -q "^$var$"; then
+                local value=$(generate_default_value "$var" "$template_path" "$timestamp")
+
+                # Gérer les arrays spécialement
+                if [[ "$value" == "ARRAY|"* ]]; then
+                    local array_values=${value#ARRAY|}
+                    echo "$var:" >> "$output_file"
+                    IFS=',' read -ra values <<< "$array_values"
+                    for val in "${values[@]}"; do
+                        echo "  - \"$val\"" >> "$output_file"
+                    done
+                else
+                    echo "$var: \"$value\"" >> "$output_file"
+                fi
+            fi
+        fi
+    done <<< "$template_vars"
+
+    # Section finale avec notes
+    cat >> "$output_file" << EOF
+
+# ========================================
+# NOTES D'UTILISATION
+# ========================================
+#
+# Structure de la configuration:
+# - Les champs commentés (#) sont optionnels
+# - Les champs REQUIS doivent être fournis
+# - Les champs système vont directement dans FileConfig
+# - Les autres variables vont dans additional_vars via #[serde(flatten)]
+#
+# Validation automatique:
+# - github_tag: doit être "apps", "packages" ou "utils"
+# - template_branch: "main" par défaut
+# - create_develop_branch: false par défaut
+#
+# Modes d'exécution:
+# - Local: génère le projet localement
+# - Remote: crée un repo GitHub avec le code généré
+
+EOF
+
+    log_success "Configuration générée: $output_file"
+}
+
+# ========================================
+# FONCTION D'AIDE ET INTERFACE UTILISATEUR
+# ========================================
+
+show_help() {
+    echo "Script de génération de configuration dynamique pour project-generator"
+    echo ""
+    echo "Usage: $0 [options] [template_path] [output_file]"
+    echo ""
+    echo "Options:"
+    echo "  --list, -l         Liste tous les templates disponibles"
+    echo "  --help, -h         Affiche cette aide"
+    echo ""
+    echo "Arguments:"
+    echo "  template_path      Chemin du template (ex: apps/astro, packages/library)"
+    echo "  output_file        Fichier de sortie (défaut: config-[template]-[date].yaml)"
+    echo ""
+    echo "Exemples:"
+    echo "  $0                          # Mode interactif"
+    echo "  $0 --list                   # Liste les templates"
+    echo "  $0 apps/astro               # Génère config pour Astro"
+    echo "  $0 packages/library config.yaml  # Avec fichier spécifique"
+    echo ""
+    echo "Le script analyse automatiquement:"
+    echo "  - FileConfig struct dans le code Rust"
+    echo "  - template_config.json du template sélectionné"
+    echo "  - Génère une configuration complète avec toutes les clés possibles"
+}
+
+# Mode interactif pour sélectionner un template
+interactive_template_selection() {
+    log_info "Mode interactif - Sélection du template"
+    echo ""
+
+    # Créer un tableau des templates disponibles
+    local templates=()
+    while IFS= read -r line; do
+        templates+=("$line")
+    done < <(find "$TEMPLATES_DIR" -name "template_config.json" -type f | sed "s|$TEMPLATES_DIR/||" | sed "s|/template_config.json||" | sort)
+
+    if [[ ${#templates[@]} -eq 0 ]]; then
+        log_error "Aucun template trouvé dans $TEMPLATES_DIR"
+        exit 1
+    fi
+
+    echo "Templates disponibles:"
+    for i in "${!templates[@]}"; do
+        echo "  $((i+1)). ${templates[i]}"
+    done
+    echo ""
+
+    while true; do
+        read -p "Sélectionnez un template (1-${#templates[@]}): " selection
+
+        if [[ "$selection" =~ ^[0-9]+$ ]] && [[ "$selection" -ge 1 ]] && [[ "$selection" -le ${#templates[@]} ]]; then
+            echo "${templates[$((selection-1))]}"
+            return 0
+        else
+            echo "Sélection invalide. Veuillez entrer un nombre entre 1 et ${#templates[@]}."
+        fi
+    done
+}
+
+# ========================================
+# FONCTION PRINCIPALE
+# ========================================
+
+main() {
+    # Vérification des dépendances
+    if ! command -v jq &> /dev/null; then
+        log_error "jq est requis mais non installé. Installez-le avec: brew install jq"
+        exit 1
+    fi
+
+    # Traitement des arguments
+    case "${1:-}" in
+        "--list"|"-l")
+            list_available_templates
+            exit 0
+            ;;
+        "--help"|"-h"|"")
+            if [[ "${1:-}" == "--help" ]] || [[ "${1:-}" == "-h" ]]; then
+                show_help
+                exit 0
+            fi
+            # Mode interactif si aucun argument
+            local template_path=$(interactive_template_selection)
+            ;;
+        *)
+            local template_path="$1"
+            ;;
+    esac
+
+    # Valider le chemin du template
+    local full_template_path="$TEMPLATES_DIR/$template_path"
+    if [[ ! -d "$full_template_path" ]]; then
+        log_error "Template non trouvé: $template_path"
+        log_info "Utilisez --list pour voir les templates disponibles"
+        exit 1
+    fi
+
+    # Générer le nom du fichier de sortie
+    local template_name=$(basename "$template_path")
+    local output_file="${2:-config-${template_name}-$(date +%Y%m%d).yaml}"
+
+    log_info "Template sélectionné: $template_path"
+    log_info "Fichier de sortie: $output_file"
+    echo ""
+
+    # Générer la configuration
+    generate_dynamic_yaml "$full_template_path" "$output_file"
+
+    # Afficher le résultat
+    echo ""
+    log_info "Contenu généré:"
+    echo "----------------------------------------"
+    cat "$output_file"
+    echo "----------------------------------------"
+    echo ""
+    log_success "Configuration prête à utiliser!"
+    log_info "Commandes suggérées:"
+    log_info "  cargo run -- --config $output_file"
+    log_info "  cargo run -- --remote --config $output_file"
+}
+
+# Exécution du script
+main "$@"
