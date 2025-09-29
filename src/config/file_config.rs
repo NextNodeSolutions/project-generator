@@ -85,6 +85,16 @@ impl FileConfig {
                     serde_json::Value::String(s) => s.clone(),
                     serde_json::Value::Bool(b) => b.to_string(),
                     serde_json::Value::Number(n) => n.to_string(),
+                    serde_json::Value::Array(arr) => {
+                        // Convert array to comma-separated string for template replacement
+                        arr.iter()
+                            .map(|item| match item {
+                                serde_json::Value::String(s) => s.clone(),
+                                _ => item.to_string().trim_matches('"').to_string(),
+                            })
+                            .collect::<Vec<String>>()
+                            .join(",")
+                    },
                     _ => v.to_string().trim_matches('"').to_string(),
                 };
                 (k.clone(), value_str)
