@@ -3,7 +3,7 @@ use std::collections::HashMap;
 
 thread_local! {
     static VARIABLES: RefCell<HashMap<String, String>> = RefCell::new(HashMap::new());
-    static DEBUG_MODE: RefCell<bool> = RefCell::new(false);
+    static DEBUG_MODE: RefCell<bool> = const { RefCell::new(false) };
 }
 
 pub fn set_variables(vars: HashMap<String, String>) {

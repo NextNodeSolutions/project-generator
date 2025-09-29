@@ -54,8 +54,7 @@ impl TemplateManager {
                 &repo_path,
             )
             .map_err(|e| {
-                std::io::Error::new(
-                    std::io::ErrorKind::Other,
+                std::io::Error::other(
                     format!("Failed to clone repository: {}", e),
                 )
             })?;

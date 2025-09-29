@@ -103,7 +103,7 @@ fn replace_in_text_file(
             let formatted_value = match replacement.type_.as_str() {
                 "array" => {
                     let json_value = functions::convert_value_to_json(&value, &replacement.type_);
-                    serde_json::to_string(&json_value).unwrap_or_else(|_| value)
+                    serde_json::to_string(&json_value).unwrap_or(value)
                 }
                 _ => value, // Use raw string value for non-JSON files
             };

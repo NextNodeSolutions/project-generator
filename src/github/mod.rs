@@ -6,7 +6,7 @@ use std::io::{Error, ErrorKind, Result};
 pub fn extract_organization_from_repo_url() -> Result<String> {
     // Extract organization from REPO_URL constant
     // REPO_URL = "https://github.com/NextNodeSolutions"
-    let org_name = REPO_URL.split('/').last().ok_or_else(|| {
+    let org_name = REPO_URL.split('/').next_back().ok_or_else(|| {
         Error::new(
             ErrorKind::InvalidData,
             "Could not extract organization from REPO_URL",
@@ -31,8 +31,7 @@ pub async fn create_github_repository_with_code(
         .create_repository(repo_name, description, false, github_tag)
         .await
         .map_err(|e| {
-            Error::new(
-                ErrorKind::Other,
+            Error::other(
                 format!("Failed to create GitHub repository: {}", e),
             )
         })?;
@@ -48,8 +47,7 @@ pub async fn create_github_repository_with_code(
             "generator@nextnode.dev",
         )
         .map_err(|e| {
-            Error::new(
-                ErrorKind::Other,
+            Error::other(
                 format!("Failed to initialize and push to GitHub: {}", e),
             )
         })?;
