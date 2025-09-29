@@ -1,0 +1,64 @@
+# ========================================
+# CONFIGURATION GÉNÉRÉE AUTOMATIQUEMENT
+# ========================================
+# Date de génération: Sat Sep 27 21:04:58 CEST 2025
+# Template analysé: /Users/walid/Development/Nextnode/project-templates/apps/astro
+# Sources:
+#   - Champs système: /Users/walid/Development/Nextnode/project-generator/src/config/file_config.rs
+#   - Variables template: /Users/walid/Development/Nextnode/project-templates/apps/astro/template_config.json
+#
+# Usage:
+#   Mode local:  cargo run -- --config config-astro-20250927.yaml
+#   Mode remote: cargo run -- --remote --config config-astro-20250927.yaml
+
+# ========================================
+# CHAMPS SYSTÈME (FileConfig)
+# ========================================
+# Ces champs sont définis dans la structure Rust FileConfig
+# et sont traités spécialement par le générateur
+
+# create_develop_branch: "false"  # [OPTIONNEL]  Option<bool>
+# github_tag: "apps"  # [OPTIONNEL]  Option<String>
+#   Valeurs autorisées: apps
+name: "@nextnode/test-astro-20250927_210458"  # [REQUIS]  String
+project_name: "test-astro-20250927_210458"  # [REQUIS]  String
+template_branch: "fix/library-template-config"  # [OPTIONNEL]  Option<String>
+template_category: "apps"  # [OPTIONNEL]  Option<String>
+template_name: "astro"  # [OPTIONNEL]  Option<String>
+
+# ========================================
+# VARIABLES DU TEMPLATE
+# ========================================
+# Ces variables sont définies dans template_config.json
+# et seront placées dans additional_vars lors de l'exécution
+
+project_author: "NextNodeSolutions <contact@nextnode.fr>"
+project_description: "Projet de test généré automatiquement pour le template astro"
+project_keywords:
+  - "astro"
+  - "nextnode"
+  - "test"
+project_license: "MIT"
+project_version: "1.0.0"
+repository_url: "https://github.com/NextNodeSolutions/test-astro-20250927_210458"
+website_url: "https://test-astro-20250927_210458.fly.dev"
+
+# ========================================
+# NOTES D'UTILISATION
+# ========================================
+#
+# Structure de la configuration:
+# - Les champs commentés (#) sont optionnels
+# - Les champs REQUIS doivent être fournis
+# - Les champs système vont directement dans FileConfig
+# - Les autres variables vont dans additional_vars via #[serde(flatten)]
+#
+# Validation automatique:
+# - github_tag: doit être "apps", "packages" ou "utils"
+# - template_branch: "main" par défaut
+# - create_develop_branch: false par défaut
+#
+# Modes d'exécution:
+# - Local: génère le projet localement
+# - Remote: crée un repo GitHub avec le code généré
+

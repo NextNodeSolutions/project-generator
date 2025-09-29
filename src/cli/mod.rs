@@ -41,7 +41,7 @@ pub fn get_template_info(
     } else {
         // List available templates
         let templates = template_manager.list_templates().map_err(|e| {
-            Error::new(ErrorKind::Other, format!("Failed to list templates: {}", e))
+            Error::other(format!("Failed to list templates: {}", e))
         })?;
 
         // Select template
@@ -107,15 +107,13 @@ pub fn interact(template_path: &Path) -> Result<()> {
     );
 
     project_generator::generate_project(template_path, &project_path).map_err(|e| {
-        Error::new(
-            ErrorKind::Other,
+        Error::other(
             format!("An error occurred while generating the project: {}", e),
         )
     })?;
 
     project_generator::install_dependencies(&project_path).map_err(|e| {
-        Error::new(
-            ErrorKind::Other,
+        Error::other(
             format!("An error occurred while installing dependencies: {}", e),
         )
     })?;

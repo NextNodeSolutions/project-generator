@@ -11,7 +11,7 @@ pub fn handle_interactive_mode(template_path: &Path) -> Result<()> {
             println!("Project generated successfully");
             Ok(())
         }
-        Err(e) => Err(Error::new(ErrorKind::Other, e.to_string())),
+        Err(e) => Err(Error::other(e.to_string())),
     }
 }
 
@@ -30,8 +30,7 @@ pub fn handle_config_mode(template_path: &Path, project_name: &str) -> Result<()
 
     let mut input = String::new();
     io::stdin().read_line(&mut input).map_err(|e| {
-        Error::new(
-            ErrorKind::Other,
+        Error::other(
             format!("Failed to read user input: {}", e),
         )
     })?;
@@ -48,8 +47,7 @@ pub fn handle_config_mode(template_path: &Path, project_name: &str) -> Result<()
 
         let mut custom_path = String::new();
         io::stdin().read_line(&mut custom_path).map_err(|e| {
-            Error::new(
-                ErrorKind::Other,
+            Error::other(
                 format!("Failed to read custom path: {}", e),
             )
         })?;
@@ -77,17 +75,15 @@ pub fn handle_config_mode_with_path(
         template_path.display()
     );
 
-    project_generator::generate_project(&template_path, &project_path).map_err(|e| {
-        Error::new(
-            ErrorKind::Other,
+    project_generator::generate_project(template_path, project_path).map_err(|e| {
+        Error::other(
             format!("An error occurred while generating the project: {}", e),
         )
     })?;
 
     if install_deps {
-        project_generator::install_dependencies(&project_path).map_err(|e| {
-            Error::new(
-                ErrorKind::Other,
+        project_generator::install_dependencies(project_path).map_err(|e| {
+            Error::other(
                 format!("An error occurred while installing dependencies: {}", e),
             )
         })?;

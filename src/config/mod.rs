@@ -15,9 +15,10 @@ pub const EXCLUDED_FILES: &[&str] = &[TEMPLATE_CONFIG_FILE];
 #[derive(Debug, serde::Deserialize)]
 pub struct Replacement {
     pub name: String,
-    pub key: String,
-    #[allow(dead_code)]
-    pub value: String,
+    #[serde(default)]
+    pub key: Option<String>,
+    #[serde(default)]
+    pub attribute: Option<String>,
     #[serde(rename = "type", default = "default_type")]
     pub type_: String,
     #[serde(default)]

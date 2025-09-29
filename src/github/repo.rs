@@ -26,7 +26,7 @@ impl GitHubRepo {
         // REPO_URL = "https://github.com/NextNodeSolutions"
         let org_name = REPO_URL
             .split('/')
-            .last()
+            .next_back()
             .ok_or("Could not extract organization from REPO_URL")?;
 
         // Build headers
@@ -58,7 +58,7 @@ impl GitHubRepo {
         // Make GitHub API call to create repository
         let client = reqwest::Client::new();
         let response = client
-            .post(&format!("https://api.github.com/orgs/{}/repos", org_name))
+            .post(format!("https://api.github.com/orgs/{}/repos", org_name))
             .headers(headers.clone())
             .json(&body)
             .send()
@@ -92,7 +92,7 @@ impl GitHubRepo {
             });
 
             let topics_response = client
-                .put(&format!(
+                .put(format!(
                     "https://api.github.com/repos/{}/{}/topics",
                     org_name, name
                 ))
@@ -183,7 +183,7 @@ impl GitHubRepo {
         // Extract organization from REPO_URL constant
         let org_name = REPO_URL
             .split('/')
-            .last()
+            .next_back()
             .ok_or("Could not extract organization from REPO_URL")?;
 
         // Build headers
@@ -212,7 +212,7 @@ impl GitHubRepo {
         // Make GitHub API call to trigger workflow
         let client = reqwest::Client::new();
         let response = client
-            .post(&format!(
+            .post(format!(
                 "https://api.github.com/repos/{}/{}/actions/workflows/{}/dispatches",
                 org_name, repo_name, workflow_file
             ))
@@ -292,7 +292,7 @@ impl GitHubRepo {
         // Extract organization from REPO_URL constant
         let org_name = REPO_URL
             .split('/')
-            .last()
+            .next_back()
             .ok_or("Could not extract organization from REPO_URL")?;
 
         // Build headers
@@ -317,7 +317,7 @@ impl GitHubRepo {
 
         // First, get the SHA of the main branch
         let main_ref_response = client
-            .get(&format!(
+            .get(format!(
                 "https://api.github.com/repos/{}/{}/git/refs/heads/main",
                 org_name, repo_name
             ))
@@ -347,7 +347,7 @@ impl GitHubRepo {
 
         // Check if develop branch already exists
         let develop_check_response = client
-            .get(&format!(
+            .get(format!(
                 "https://api.github.com/repos/{}/{}/git/refs/heads/develop",
                 org_name, repo_name
             ))
@@ -369,7 +369,7 @@ impl GitHubRepo {
         });
 
         let create_response = client
-            .post(&format!(
+            .post(format!(
                 "https://api.github.com/repos/{}/{}/git/refs",
                 org_name, repo_name
             ))

@@ -46,7 +46,7 @@ async fn main() -> Result<()> {
         // Handle generation based on mode
         if args.config.is_none() {
             return handle_interactive_mode(&template_path)
-                .map_err(|e| Error::new(ErrorKind::Other, e.to_string()));
+                .map_err(|e| Error::other(e.to_string()));
         }
 
         // Get project name from variables
@@ -55,7 +55,7 @@ async fn main() -> Result<()> {
         });
 
         return handle_config_mode(&template_path, &project_name)
-            .map_err(|e| Error::new(ErrorKind::Other, e.to_string()));
+            .map_err(|e| Error::other(e.to_string()));
     }
 
     // Remote mode: generate project locally, then create GitHub repo
@@ -121,16 +121,15 @@ async fn main() -> Result<()> {
             &project_path,
             false,
         )
-        .map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?;
+        .map_err(|e| Error::other(e.to_string()))?;
     } else {
         handle_interactive_mode(&template_path)
-            .map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?;
+            .map_err(|e| Error::other(e.to_string()))?;
     }
 
     // Install dependencies AFTER copying template files but BEFORE Git operations
     crate::generate::project_generator::install_dependencies(&project_path).map_err(|e| {
-        Error::new(
-            ErrorKind::Other,
+        Error::other(
             format!("Failed to install dependencies: {}", e),
         )
     })?;

@@ -44,24 +44,25 @@ pub fn create_ordered_map(
 
         // Insert new keys
         for replacement in replacements {
-            if !template_json.contains_key(&replacement.key) {
+            let json_key = get_json_key(replacement);
+            if !template_json.contains_key(&json_key) {
                 if let Some(value) = context::get_variable(&replacement.name) {
                     let json_value = convert_value_to_json(&value, &replacement.type_);
-                    ordered_map.insert(replacement.key.clone(), json_value);
+                    ordered_map.insert(json_key.clone(), json_value);
                     context::debug_print(&format!(
                         "Added new key '{}' with value from variable '{}'",
-                        replacement.key, replacement.name
+                        json_key, replacement.name
                     ));
                 } else {
                     context::debug_print(&format!(
                         "Warning: Variable '{}' not found for key '{}'",
-                        replacement.name, replacement.key
+                        replacement.name, json_key
                     ));
                 }
             } else {
                 context::debug_print(&format!(
                     "Key '{}' already exists in template, skipping",
-                    replacement.key
+                    json_key
                 ));
             }
         }
@@ -71,18 +72,19 @@ pub fn create_ordered_map(
         );
         // Insert new keys at the end
         for replacement in replacements {
-            if !template_json.contains_key(&replacement.key) {
+            let json_key = get_json_key(replacement);
+            if !template_json.contains_key(&json_key) {
                 if let Some(value) = context::get_variable(&replacement.name) {
                     let json_value = convert_value_to_json(&value, &replacement.type_);
-                    ordered_map.insert(replacement.key.clone(), json_value);
+                    ordered_map.insert(json_key.clone(), json_value);
                     context::debug_print(&format!(
                         "Added new key '{}' with value from variable '{}'",
-                        replacement.key, replacement.name
+                        json_key, replacement.name
                     ));
                 } else {
                     context::debug_print(&format!(
                         "Warning: Variable '{}' not found for key '{}'",
-                        replacement.name, replacement.key
+                        replacement.name, json_key
                     ));
                 }
             }
@@ -90,6 +92,17 @@ pub fn create_ordered_map(
     }
 
     ordered_map
+}
+
+fn get_json_key(replacement: &Replacement) -> String {
+    // Priority: attribute > key > fallback to replacement name
+    if let Some(attribute) = &replacement.attribute {
+        attribute.clone()
+    } else if let Some(key) = &replacement.key {
+        key.clone()
+    } else {
+        replacement.name.clone()
+    }
 }
 
 pub fn update_existing_values(
@@ -100,23 +113,24 @@ pub fn update_existing_values(
 
     for replacement in replacements {
         if let Some(value) = context::get_variable(&replacement.name) {
-            if let Some(existing_value) = ordered_map.get_mut(&replacement.key) {
+            let json_key = get_json_key(replacement);
+            if let Some(existing_value) = ordered_map.get_mut(&json_key) {
                 let json_value = convert_value_to_json(&value, &replacement.type_);
                 context::debug_print(&format!(
                     "Updated key '{}' from '{}' to '{}'",
-                    replacement.key, existing_value, json_value
+                    json_key, existing_value, json_value
                 ));
                 *existing_value = json_value;
             } else {
                 context::debug_print(&format!(
                     "Warning: Key '{}' not found in template for replacement",
-                    replacement.key
+                    json_key
                 ));
             }
         } else {
             context::debug_print(&format!(
                 "Warning: Variable '{}' not found for replacement of key '{}'",
-                replacement.name, replacement.key
+                replacement.name, get_json_key(replacement)
             ));
         }
     }
